@@ -4,6 +4,7 @@
 #include <err.h>
 #include <errno.h>
 #include <getopt.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,12 +20,12 @@ enum sort_by
 
 static struct opts
 {
-    short int all;
-    short int list;
-    short int directory;
-    short int comma;
+    bool all;
+    bool list;
+    bool directory;
+    bool comma;
     enum sort_by sort;
-    short int sort_reverse;
+    bool sort_reverse;
 } opts;
 
 struct ls_entry
@@ -188,30 +189,30 @@ list_entries(struct ls_entry *ents)
 int
 main(int argc, char *argv[])
 {
-    opts.all = 0;
-    opts.list = 0;
-    opts.directory = 0;
+    opts.all = false;
+    opts.list = false;
+    opts.directory = false;
     opts.sort = SORT_BY_NAME;
-    opts.sort_reverse = 0;
+    opts.sort_reverse = false;
 
     int opt;
     extern int optind;
     while ((opt = getopt(argc, argv, "+adlmrtSU")) != -1) {
         switch (opt) {
             case 'a':
-                opts.all = 1;
+                opts.all = true;
                 break;
             case 'd':
-                opts.directory = 1;
+                opts.directory = true;
                 break;
             case 'l':
-                opts.list = 1;
+                opts.list = true;
                 break;
             case 'm':
-                opts.comma = 1;
+                opts.comma = true;
                 break;
             case 'r':
-                opts.sort_reverse = 1;
+                opts.sort_reverse = true;
                 break;
             case 't':
                 opts.sort = SORT_BY_MTIME;
