@@ -231,6 +231,30 @@ fileowner(uid_t uid, gid_t gid, char owner[FILEOWNER_MAXLEN + 1])
 }
 
 void
+print_entry(struct ls_entry *ent)
+{
+    if (!opts.list) {
+        fputs(ent->name, stdout);
+        return;
+    }
+
+    char perms[10] = "---------";
+    fileperms(ent->stat->st_mode, perms);
+
+    char owner[FILEOWNER_MAXLEN + 1] = "";
+    fileowner(ent->stat->st_uid, ent->stat->st_gid, owner);
+
+    printf("%c%s %-2lu %s %lu\t%s",
+        filetype(ent->stat->st_mode),
+        perms,
+        ent->stat->st_nlink,
+        owner,
+        ent->stat->st_size,
+        ent->name
+    );
+}
+
+void
 list_entries(struct ls_entry *ents)
 {
     char *sep = "\t";
@@ -248,24 +272,7 @@ list_entries(struct ls_entry *ents)
             sep = "";
         }
 
-        if (opts.list) {
-            char perms[10] = "---------";
-            fileperms(ent->stat->st_mode, perms);
-
-            char owner[FILEOWNER_MAXLEN + 1] = "";
-            fileowner(ent->stat->st_uid, ent->stat->st_gid, owner);
-
-            printf("%c%s %-2lu %s %lu\t%s",
-                filetype(ent->stat->st_mode),
-                perms,
-                ent->stat->st_nlink,
-                owner,
-                ent->stat->st_size,
-                ent->name
-            );
-        } else {
-            printf("%s", ent->name);
-        }
+        print_entry(ent);
 
         ent = ent->next;
         fputs(sep, stdout);
