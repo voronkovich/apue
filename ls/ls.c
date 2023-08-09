@@ -4,11 +4,17 @@
 #include <err.h>
 #include <errno.h>
 #include <getopt.h>
+#include <grp.h>
+#include <pwd.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
+#define USERNAME_MAXLEN 32
+#define GROUPNAME_MAXLEN 32
+#define FILEOWNER_MAXLEN (USERNAME_MAXLEN + GROUPNAME_MAXLEN + 1)
 
 enum sort_by
 {
@@ -24,6 +30,7 @@ static struct opts
     bool list;
     bool directory;
     bool comma;
+    bool numeric_ids;
     enum sort_by sort;
     bool sort_reverse;
 } opts;
@@ -162,6 +169,67 @@ get_entries(char *path)
     return ents;
 }
 
+char
+filetype(mode_t mode)
+{
+    if (S_ISREG(mode))  return '-';
+    if (S_ISDIR(mode))  return 'd';
+    if (S_ISLNK(mode))  return 'l';
+    if (S_ISFIFO(mode)) return 'p';
+    if (S_ISSOCK(mode)) return 's';
+    if (S_ISCHR(mode))  return 'c';
+    if (S_ISBLK(mode))  return 'b';
+
+    return '?';
+}
+
+void
+fileperms(mode_t mode, char perms[9])
+{
+    perms[0] = mode & S_IRUSR ? 'r'  : '-';
+    perms[1] = mode & S_IWUSR ? 'w'  : '-';
+    perms[2] = mode & S_IXUSR ? 'x'  : '-';
+    perms[3] = mode & S_IRGRP ? 'r'  : '-';
+    perms[4] = mode & S_IWGRP ? 'w'  : '-';
+    perms[5] = mode & S_IXGRP ? 'x'  : '-';
+    perms[6] = mode & S_IROTH ? 'r'  : '-';
+    perms[7] = mode & S_IWOTH ? 'w'  : '-';
+    perms[8] = mode & S_IXOTH ? 'x'  : '-';
+}
+
+void
+fileowner(uid_t uid, gid_t gid, char owner[FILEOWNER_MAXLEN + 1])
+{
+    struct passwd *usr = NULL;
+    char username[USERNAME_MAXLEN + 1] = "";
+
+    struct group *grp = NULL;
+    char groupname[GROUPNAME_MAXLEN + 1] = "";
+
+    if (!opts.numeric_ids) {
+        if ((usr = getpwuid(uid)) == NULL) {
+            warn("cannot get username for '%d'", uid);
+        }
+        if ((grp = getgrgid(gid)) == NULL) {
+            warn("cannot get groupname for '%d'", gid);
+        }
+    }
+
+    if (usr != NULL) {
+        strncpy(username, usr->pw_name, USERNAME_MAXLEN + 1);
+    } else {
+        snprintf(username, USERNAME_MAXLEN + 1, "%u", uid);
+    }
+
+    if (grp != NULL) {
+        strncpy(groupname, grp->gr_name, GROUPNAME_MAXLEN + 1);
+    } else {
+        snprintf(groupname, GROUPNAME_MAXLEN + 1, "%u", gid);
+    }
+
+    snprintf(owner, FILEOWNER_MAXLEN + 1, "%s %s", username, groupname);
+}
+
 void
 list_entries(struct ls_entry *ents)
 {
@@ -173,14 +241,34 @@ list_entries(struct ls_entry *ents)
         sep = "\n";
     }
 
-    while (ents != NULL) {
-        if (ents->next == NULL) {
+    struct ls_entry *ent = ents;
+
+    while (ent != NULL) {
+        if (ent->next == NULL) {
             sep = "";
         }
 
-        printf("%s%s", ents->name, sep);
+        if (opts.list) {
+            char perms[10] = "---------";
+            fileperms(ent->stat->st_mode, perms);
 
-        ents = ents->next;
+            char owner[FILEOWNER_MAXLEN + 1] = "";
+            fileowner(ent->stat->st_uid, ent->stat->st_gid, owner);
+
+            printf("%c%s %-2lu %s %lu\t%s",
+                filetype(ent->stat->st_mode),
+                perms,
+                ent->stat->st_nlink,
+                owner,
+                ent->stat->st_size,
+                ent->name
+            );
+        } else {
+            printf("%s", ent->name);
+        }
+
+        ent = ent->next;
+        fputs(sep, stdout);
     }
 
     fputs("\n", stdout);
@@ -192,12 +280,13 @@ main(int argc, char *argv[])
     opts.all = false;
     opts.list = false;
     opts.directory = false;
+    opts.numeric_ids = false;
     opts.sort = SORT_BY_NAME;
     opts.sort_reverse = false;
 
     int opt;
     extern int optind;
-    while ((opt = getopt(argc, argv, "+adlmrtSU")) != -1) {
+    while ((opt = getopt(argc, argv, "+adlmnrtSU")) != -1) {
         switch (opt) {
             case 'a':
                 opts.all = true;
@@ -210,6 +299,9 @@ main(int argc, char *argv[])
                 break;
             case 'm':
                 opts.comma = true;
+                break;
+            case 'n':
+                opts.numeric_ids = true;
                 break;
             case 'r':
                 opts.sort_reverse = true;
