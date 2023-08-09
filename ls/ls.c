@@ -11,10 +11,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #define USERNAME_MAXLEN 32
 #define GROUPNAME_MAXLEN 32
 #define FILEOWNER_MAXLEN (USERNAME_MAXLEN + GROUPNAME_MAXLEN + 1)
+#define FILETIME_FORMAT "%x %T"
 
 enum sort_by
 {
@@ -24,6 +26,12 @@ enum sort_by
     UNSORTED
 };
 
+enum filetime
+{
+    ATIME,
+    MTIME,
+};
+
 static struct opts
 {
     bool all;
@@ -31,6 +39,7 @@ static struct opts
     bool directory;
     bool comma;
     bool numeric_ids;
+    enum filetime filetime;
     enum sort_by sort;
     bool sort_reverse;
 } opts;
@@ -230,6 +239,30 @@ fileowner(uid_t uid, gid_t gid, char owner[FILEOWNER_MAXLEN + 1])
     snprintf(owner, FILEOWNER_MAXLEN + 1, "%s %s", username, groupname);
 }
 
+int
+time2str(time_t time, char *format, char *timebuf, size_t bufsize)
+{
+    struct tm *tm = localtime(&time);
+    if (tm == NULL) {
+        return -1;
+    }
+
+    return strftime(timebuf, bufsize, format, tm);
+}
+
+void
+filetime(struct ls_entry *ent, char *timebuf, size_t bufsize)
+{
+    time_t time = ent->stat->st_mtime;
+    if (opts.filetime == ATIME) {
+        time = ent->stat->st_atime;
+    }
+
+    if (time2str(time, FILETIME_FORMAT, timebuf, bufsize) <= 0) {
+        warn("cannot convert time for '%s'", ent->name);
+    }
+}
+
 void
 print_entry(struct ls_entry *ent)
 {
@@ -244,12 +277,16 @@ print_entry(struct ls_entry *ent)
     char owner[FILEOWNER_MAXLEN + 1] = "";
     fileowner(ent->stat->st_uid, ent->stat->st_gid, owner);
 
-    printf("%c%s %-2lu %s %lu\t%s",
+    char time[24] = "";
+    filetime(ent, time, sizeof(time));
+
+    printf("%c%s %-2lu\t%s %-10lu\t%s  %s",
         filetype(ent->stat->st_mode),
         perms,
         ent->stat->st_nlink,
         owner,
         ent->stat->st_size,
+        time,
         ent->name
     );
 }
@@ -288,12 +325,13 @@ main(int argc, char *argv[])
     opts.list = false;
     opts.directory = false;
     opts.numeric_ids = false;
+    opts.filetime = MTIME;
     opts.sort = SORT_BY_NAME;
     opts.sort_reverse = false;
 
     int opt;
     extern int optind;
-    while ((opt = getopt(argc, argv, "+adlmnrtSU")) != -1) {
+    while ((opt = getopt(argc, argv, "+adlmnurtSU")) != -1) {
         switch (opt) {
             case 'a':
                 opts.all = true;
@@ -309,6 +347,9 @@ main(int argc, char *argv[])
                 break;
             case 'n':
                 opts.numeric_ids = true;
+                break;
+            case 'u':
+                opts.filetime = ATIME;
                 break;
             case 'r':
                 opts.sort_reverse = true;
