@@ -207,7 +207,7 @@ fileperms(mode_t mode, char perms[9])
 }
 
 void
-fileowner(uid_t uid, gid_t gid, char owner[FILEOWNER_MAXLEN + 1])
+fileowner(uid_t uid, gid_t gid, char *ownerbuf, size_t bufsize)
 {
     struct passwd *usr = NULL;
     char username[USERNAME_MAXLEN + 1] = "";
@@ -236,7 +236,7 @@ fileowner(uid_t uid, gid_t gid, char owner[FILEOWNER_MAXLEN + 1])
         snprintf(groupname, GROUPNAME_MAXLEN + 1, "%u", gid);
     }
 
-    snprintf(owner, FILEOWNER_MAXLEN + 1, "%s %s", username, groupname);
+    snprintf(ownerbuf, bufsize, "%s %s", username, groupname);
 }
 
 int
@@ -275,7 +275,7 @@ print_entry(struct ls_entry *ent)
     fileperms(ent->stat->st_mode, perms);
 
     char owner[FILEOWNER_MAXLEN + 1] = "";
-    fileowner(ent->stat->st_uid, ent->stat->st_gid, owner);
+    fileowner(ent->stat->st_uid, ent->stat->st_gid, owner, sizeof(owner));
 
     char time[24] = "";
     filetime(ent, time, sizeof(time));
